@@ -1,7 +1,38 @@
 using Gst;
 
-public static uint spect_bands = 20;
+public static uint spect_bands = 32;
 public static uint AUDIOFREQ = 44100;
+
+
+public static int normalize_mag(float mag){
+        // Normalize magnitude to 0-255
+	double mag_min = -100.0;
+	double mag_max = -40.0;
+	//stdout.printf("yo %f\n\n",mag);
+        if (mag < mag_min)
+            return 0;
+        if (mag > mag_max)
+            return 255;
+
+        return (int)(((mag-mag_min) / (mag_max - mag_min)) * 255);
+}
+
+public static bool createImage (GLib.Value magnitudes, GLib.Value phases, uint width, uint height){
+		      double freq;
+	      uint i;
+	for (i = 0; i < spect_bands; ++i) {
+		freq = (double) ((AUDIOFREQ / 2) * i + AUDIOFREQ / 4) / spect_bands;
+		var mag = ValueList.get_value(magnitudes, i);
+		var phase = ValueList.get_value(phases, i);
+
+		if (mag != null && phase != null) {
+//		normalize_mag(mag.get_float ());
+		stdout.printf ("band %u (freq %g): magnitude %i dB phase %f\n", i, freq,
+		    	normalize_mag(mag.get_float ()), phase.get_float ());
+		}
+	}
+	return true;
+}
 
 public static bool
 	message_handler (Gst.Bus bus, Gst.Message message)
@@ -12,26 +43,15 @@ public static bool
 	    Gst.ClockTime endtime;
 
 	    if (name == "spectrum") {
-	      double freq;
-	      uint i;
+
 	      if (!s.get_clock_time("endtime", out endtime))
 		endtime = Gst.CLOCK_TIME_NONE;
 
-	      stdout.printf ("New spectrum message, endtime %", endtime);
+	     // stdout.printf ("New spectrum message, endtime %s\n", endtime.to_string());
 
 	      var magnitudes = s.get_value ("magnitude");
 	      var phases = s.get_value ("phase");
-
-	      for (i = 0; i < spect_bands; ++i) {
-		freq = (double) ((AUDIOFREQ / 2) * i + AUDIOFREQ / 4) / spect_bands;
-		var mag = ValueList.get_value (magnitudes, i);
-		var phase = ValueList.get_value (phases, i);
-
-		if (mag != null && phase != null) {
-		  stdout.printf ("band %u (freq %g): magnitude %f dB phase %f\n", i, freq,
-		      mag.get_float (), phase.get_float ());
-		}
-	      }
+	createImage(magnitudes,phases,16,9);
 	      stdout.printf ("\n");
 	    }
 	  }
@@ -47,7 +67,13 @@ public static bool
 
  		var bin = new Pipeline ("test");
     		var src = ElementFactory.make ("pulsesrc", "src");
-		src.set("device","alsa_output.pci-0000_00_1b.0.hdmi-stereo-extra1.monitor");
+    		string dev = args[1];
+    		if(dev == null) // set default value
+    			dev = "alsa_output.pci-0000_00_1b.0.analog-stereo.monitor";
+    			//"alsa_output.pci-0000_00_1b.0.hdmi-stereo-extra1.monitor"
+    			//alsa_output.pci-0000_00_1b.0.analog-stereo.monitor
+		src.set("device",dev);
+
 		//src.set("wave", 0);
 		//src.set("freq", 6000.0);
 
